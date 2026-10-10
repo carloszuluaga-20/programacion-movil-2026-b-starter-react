@@ -21,6 +21,36 @@ function parseId(rawId) {
   return /^\d+$/.test(rawId) ? Number(rawId) : null;
 }
 
+// Collect all field errors before rejecting a request.
+function validateProduct(body) {
+  const details = [];
+  const { name, price, category, stock } = body ?? {};
+
+  if (typeof name !== 'string' || name.trim().length === 0) {
+    details.push('Name is required and must be a non-empty string.');
+  } else if (name.length > 60) {
+    details.push('Name must contain at most 60 characters.');
+  }
+
+  if (
+    typeof price !== 'number' ||
+    !Number.isFinite(price) ||
+    price <= 0
+  ) {
+    details.push('Price must be a number greater than zero.');
+  }
+
+  if (!CATEGORIES.includes(category)) {
+    details.push('Category must be Bebidas, Snacks, Aseo or Hogar.');
+  }
+
+  if (!Number.isInteger(stock) || stock < 0) {
+    details.push('Stock must be an integer greater than or equal to zero.');
+  }
+
+  return details;
+}
+
 function createApp() {
   const app = express();
 
@@ -31,15 +61,9 @@ function createApp() {
   // Each application instance starts with a fresh copy of the seed.
   const products = seedProducts.map((item) => ({ ...item }));
 
-  // Temporary handler for the routes implemented in the next step.
-  const notImplemented = (_req, res) => {
-    res.status(501).json({
-      error: 'Not implemented',
-      details: [],
-    });
-  };
+  // Keep increasing the id even when a product is deleted.
+  let nextId = Math.max(0, ...products.map((product) => product.id)) + 1;
 
-  // List products with optional combined search and category filters.
   app.get('/api/products', (req, res) => {
     const search =
       typeof req.query.search === 'string'
@@ -61,7 +85,6 @@ function createApp() {
     return res.status(200).json(filteredProducts);
   });
 
-  // Get one product using the supplied id parser.
   app.get('/api/products/:id', (req, res) => {
     const id = parseId(req.params.id);
 
@@ -84,14 +107,95 @@ function createApp() {
     return res.status(200).json(product);
   });
 
-  // TODO: create a product with validation and an incremental id.
-  app.post('/api/products', notImplemented);
+  app.post('/api/products', (req, res) => {
+    const details = validateProduct(req.body);
 
-  // TODO: update an existing product with validation.
-  app.put('/api/products/:id', notImplemented);
+    if (details.length > 0) {
+      return res.status(400).json({
+        error: 'Invalid product data',
+        details,
+      });
+    }
 
-  // TODO: delete an existing product and return 204 without a body.
-  app.delete('/api/products/:id', notImplemented);
+    const { name, price, category, stock } = req.body;
+    const product = {
+      id: nextId++,
+      name: name.trim(),
+      price,
+      category,
+      stock,
+    };
+
+    products.push(product);
+
+    return res.status(201).json(product);
+  });
+
+  app.put('/api/products/:id', (req, res) => {
+    const id = parseId(req.params.id);
+
+    if (id === null) {
+      return res.status(400).json({
+        error: 'Invalid product id',
+        details: ['The product id must contain only digits.'],
+      });
+    }
+
+    const index = products.findIndex((item) => item.id === id);
+
+    if (index === -1) {
+      return res.status(404).json({
+        error: 'Product not found',
+        details: [`No product exists with id ${id}.`],
+      });
+    }
+
+    const details = validateProduct(req.body);
+
+    if (details.length > 0) {
+      return res.status(400).json({
+        error: 'Invalid product data',
+        details,
+      });
+    }
+
+    const { name, price, category, stock } = req.body;
+    const product = {
+      id,
+      name: name.trim(),
+      price,
+      category,
+      stock,
+    };
+
+    products[index] = product;
+
+    return res.status(200).json(product);
+  });
+
+  app.delete('/api/products/:id', (req, res) => {
+    const id = parseId(req.params.id);
+
+    if (id === null) {
+      return res.status(400).json({
+        error: 'Invalid product id',
+        details: ['The product id must contain only digits.'],
+      });
+    }
+
+    const index = products.findIndex((item) => item.id === id);
+
+    if (index === -1) {
+      return res.status(404).json({
+        error: 'Product not found',
+        details: [`No product exists with id ${id}.`],
+      });
+    }
+
+    products.splice(index, 1);
+
+    return res.status(204).end();
+  });
 
   // YA DADO: ruta desconocida → 404 con el formato de error uniforme.
   app.use((req, res) => {
