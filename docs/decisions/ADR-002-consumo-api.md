@@ -85,16 +85,17 @@ from network failures and present feedback appropriate to each screen.
 
 ## Supplied server utilities
 
-- express.json() parses JSON request bodies before endpoint handlers.
-- CORS allows the separate development frontend to access the API.
-- parseId validates route identifiers; its supplied behavior will be retained.
+- `express.json()` parses JSON request bodies before endpoint handlers.
+- CORS allows requests from the configured development frontend origins.
+- `parseId()` accepts identifiers containing only digits and converts them to numbers; other values produce a 400 response in the product routes.
 - The fallback 404 handler handles requests that do not match any route.
-- The 500 handler handles unexpected errors forwarded through Express.
-- The supplied handlers will be used as provided.
+- The central error handler returns 400 for malformed JSON and 500 for unexpected server errors.
+- These utilities retain the supplied starter behavior.
 
-An integration test will request an unknown route and verify that the
+An integration test requests an unknown route and verifies that the
 fallback handler returns 404 with the expected error structure.
-The README will explain this behavior in English.
+Another integration test sends malformed JSON and verifies a 400 response.
+The README explains the supplied handlers and their behavior in English.
 
 ---
 

@@ -4,7 +4,7 @@
 - **Resource:** `/api/products`
 - **Development base URL:** `http://localhost:3000`
 - **Auth required:** No
-- **Implementation status:** Planned
+- **Implementation status:** Implemented
 
 ---
 
@@ -15,13 +15,15 @@ A Product contains `id`, `name`, `price`, `category` and `stock`.
 POST and PUT require all four editable fields:
 
 | Field | Type | Validation |
-|-------|------|------------|
+|---|---|---|
 | name | string | Required, not blank, maximum 60 characters |
-| price | number | Greater than zero |
+| price | number | Finite number greater than zero |
 | category | string | Bebidas, Snacks, Aseo or Hogar |
 | stock | number | Integer greater than or equal to zero |
 
-The server generates incremental IDs. PUT preserves the existing ID.
+The API generates incremental IDs and preserves the existing ID during updates.
+Deleted IDs are not reused within the same server session.
+Product names are trimmed before storage.
 
 Errors use this structure:
 
@@ -29,15 +31,17 @@ Errors use this structure:
 {
   "error": "Invalid product data",
   "details": [
-    "name is required",
-    "price must be greater than zero"
+    "Name is required and must be a non-empty string.",
+    "Price must be a number greater than zero."
   ]
 }
 ```
 
 Validation collects all detected problems and includes one details entry
-per problem. This example illustrates the response structure; supplied
-starter handler messages are retained as provided.
+per problem. The example above represents an invalid name and price
+with otherwise valid fields.
+
+The supplied fallback and central error handlers retain their starter messages.
 
 ---
 
@@ -50,7 +54,7 @@ starter handler messages are retained as provided.
 ### Request
 
 | Param | In | Type | Required | Notes |
-|-------|----|------|----------|-------|
+|---|---|---|---|---|
 | search | query | string | No | Name contains the text, without case sensitivity |
 | category | query | string | No | Exact category match |
 
@@ -66,32 +70,36 @@ GET /api/products?search=agua&category=Bebidas
 
 **Success: 200 OK**
 
+Example response with the initial seed data:
+
 ```json
 [
   {
     "id": 1,
-    "name": "Example beverage",
-    "price": 2500,
+    "name": "Agua mineral 600 ml",
+    "price": 1800,
     "category": "Bebidas",
-    "stock": 8
+    "stock": 120
   }
 ]
 ```
 
-An empty catalog or a filter with no matches returns `[]` with status 200.
+An empty catalog or filters with no matches return `[]` with status 200.
 
 ### Errors
 
 No endpoint-specific errors are defined for listing products.
-Unexpected failures use the supplied server error handler.
+Unexpected server failures use the central error handler.
 
-The app shows a request error with a retry action when loading fails.
+The app displays an error with a retry action if loading fails.
 
 ### Caching / offline
 
-Online-only. The page keeps the loaded array in local state.
+No persistent offline cache is used.
+The page keeps the loaded array in local React state.
+
 The app applies its search and category controls through `filterProducts`.
-Returning after a mutation refreshes the catalog from the API.
+Returning to the list refreshes the catalog from the API.
 
 ---
 
@@ -104,37 +112,72 @@ Returning after a mutation refreshes the catalog from the API.
 ### Request
 
 | Param | In | Type | Required | Notes |
-|-------|----|------|----------|-------|
-| id | path | number | Yes | Product identifier, checked by the supplied parseId utility |
+|---|---|---|---|---|
+| id | path | string of digits | Yes | Converted to a number by the supplied parseId utility |
 
 No request body is required.
+
+Example:
+
+```text
+GET /api/products/1
+```
 
 ### Response
 
 **Success: 200 OK**
 
+Example response with the initial seed data:
+
 ```json
 {
   "id": 1,
-  "name": "Example beverage",
-  "price": 2500,
+  "name": "Agua mineral 600 ml",
+  "price": 1800,
   "category": "Bebidas",
-  "stock": 8
+  "stock": 120
 }
 ```
 
 ### Errors
 
 | Status | Meaning | App behavior |
-|--------|---------|--------------|
-| 400 | Invalid identifier | Show an invalid-ID message and back navigation |
-| 404 | Product does not exist | Show Product not found and back navigation |
-| 500 | Unexpected server error | Show an error with a retry action |
+|---|---|---|
+| 400 | Invalid identifier | Display an error; back navigation remains available |
+| 404 | Product does not exist | Display a not-found state with a back-to-list action |
+| 500 | Unexpected server error | Display an error with a retry action |
+
+Invalid identifier example:
+
+```json
+{
+  "error": "Invalid product id",
+  "details": [
+    "The product id must contain only digits."
+  ]
+}
+```
+
+Missing product example:
+
+```json
+{
+  "error": "Product not found",
+  "details": [
+    "No product exists with id 999."
+  ]
+}
+```
+
+The detail page also validates the route identifier before sending a request.
 
 ### Caching / offline
 
-Online-only. Product data remains in page state while the page is active.
-Refresh when returning from editing. No persistent offline cache is used.
+Product data is kept in page state.
+The page refreshes when it becomes active again.
+
+No persistent offline cache is used.
+Connection failures display an error message.
 
 ---
 
@@ -164,7 +207,7 @@ Send `Content-Type: application/json`.
 
 **Success: 201 Created**
 
-Return the complete created Product, including its generated ID.
+The API returns the complete created product, including its generated ID.
 
 ```json
 {
@@ -176,20 +219,26 @@ Return the complete created Product, including its generated ID.
 }
 ```
 
-The example ID assumes the initial maximum ID is 8.
+The example ID assumes this is the first creation after loading the
+initial eight products.
 
 ### Errors
 
 | Status | Meaning | App behavior |
-|--------|---------|--------------|
-| 400 | Product validation failed | Preserve input and display error details |
+|---|---|---|
+| 400 | Invalid product data or malformed JSON | Preserve input and display the error and available details |
 | 500 | Unexpected server error | Preserve input and display an error |
+
+The form runs `validateProduct` before sending the request.
+Invalid local input displays field errors without calling the API.
 
 ### Caching / offline
 
-No offline creation or queued requests.
-On success, navigate to the returned product's detail.
-Refresh the list when it becomes active again.
+There is no offline creation or request queue.
+Failed saves preserve the current form values for resubmission.
+
+On success, navigate to `/productos`.
+The list refreshes when it becomes active again.
 
 ---
 
@@ -202,11 +251,13 @@ Refresh the list when it becomes active again.
 ### Request
 
 | Param | In | Type | Required | Notes |
-|-------|----|------|----------|-------|
-| id | path | number | Yes | Existing product identifier |
+|---|---|---|---|---|
+| id | path | string of digits | Yes | Existing product identifier |
 
 Send `Content-Type: application/json`.
-All editable fields are required; this endpoint does not perform a partial update.
+
+All four editable fields are required.
+This endpoint does not perform a partial update.
 
 **Body:**
 
@@ -233,19 +284,29 @@ All editable fields are required; this endpoint does not perform a partial updat
 }
 ```
 
+The ID is preserved.
+The API replaces the editable fields only after validation succeeds.
+
 ### Errors
 
 | Status | Meaning | App behavior |
-|--------|---------|--------------|
-| 400 | Invalid identifier or product data | Display the message and validation details |
-| 404 | Product does not exist | Show a not-found message and back navigation |
-| 500 | Unexpected server error | Preserve input and display an error |
+|---|---|---|
+| 400 | Invalid identifier, product data or malformed JSON | Preserve input and display the error and available details |
+| 404 | Product does not exist | Display a not-found state during initial loading; display a save error if it disappears before submission |
+| 500 | Unexpected server error | Display a loading error with retry, or preserve input when saving fails |
+
+The edit form first loads the existing product with `getProduct`.
+It runs `validateProduct` before sending an update.
 
 ### Caching / offline
 
-No offline updates.
-On success, navigate to the product detail and refresh its data.
-Refresh the list when it becomes active again.
+There are no offline updates or queued requests.
+Failed saves preserve the current form values.
+
+On success, navigate to `/productos`.
+The list refreshes when it becomes active again.
+
+Cancelling editing returns to `/productos/:id`.
 
 ---
 
@@ -258,68 +319,108 @@ Refresh the list when it becomes active again.
 ### Request
 
 | Param | In | Type | Required | Notes |
-|-------|----|------|----------|-------|
-| id | path | number | Yes | Existing product identifier |
+|---|---|---|---|---|
+| id | path | string of digits | Yes | Existing product identifier |
 
 No request body is required.
-The app asks for inline confirmation before sending the request.
+The app displays inline confirmation before sending the request.
+
+Selecting Cancel hides the confirmation without sending DELETE.
 
 ### Response
 
 **Success: 204 No Content**
 
-The response has no body. The client must not attempt to parse JSON
-for this successful response.
+The response has no body.
+The client returns without attempting to parse JSON.
 
 ### Errors
 
 | Status | Meaning | App behavior |
-|--------|---------|--------------|
-| 400 | Invalid identifier | Show the error on the detail page |
-| 404 | Product does not exist | Show a not-found message |
-| 500 | Unexpected server error | Keep the detail page and show the error |
+|---|---|---|
+| 400 | Invalid identifier | Keep the detail page and display the error |
+| 404 | Product no longer exists | Keep the detail page and display a not-found error message |
+| 500 | Unexpected server error | Keep the detail page and display the error |
+
+Failed deletion keeps the current product and confirmation visible.
+Repeated deletion requests are prevented while a request is pending.
 
 ### Caching / offline
 
-No offline deletion.
-On success, return to `/productos` and refresh the catalog.
+There is no offline deletion or request queue.
+
+On success, return to `/productos`.
+The list refreshes when it becomes active again.
 
 ---
 
 ## DTO → domain mapping
 
-The JSON Product maps directly to the domain Product type.
+The JSON product maps directly to the domain `Product` type.
 
 | DTO field | Domain field | Transform |
-|-----------|--------------|-----------|
-| id | id | None |
-| name | name | None |
-| price | price | Preserve numeric value; formatCOP is used only for display |
-| category | category | Preserve the required category value |
-| stock | stock | Preserve integer quantity; toProductView derives the stock label |
+|---|---|---|
+| id | id | Preserve numeric identifier |
+| name | name | Preserve API value; toProductView trims it for display |
+| price | price | Preserve numeric value; formatCOP formats it for display |
+| category | category | Preserve the exact category value |
+| stock | stock | Preserve integer quantity; toProductView derives labels and flags |
+
+`toProductView` produces these stock labels:
+
+| Stock | Label |
+|---|---|
+| 0 | Agotado |
+| 1 to 4 | Pocas unidades |
+| 5 or more | Disponible |
+
+The client uses TypeScript types for the response structure.
+It does not perform runtime schema validation of successful responses.
 
 ---
 
 ## Shared error handling
 
-The data layer checks response.ok because fetch does not throw
-automatically for HTTP error statuses.
+The data layer checks `response.ok` because `fetch` does not throw
+automatically for unsuccessful HTTP statuses.
 
-HTTP failures are represented by the supplied ApiError, preserving
-the status, error message and details. Network failures have no HTTP
-response and are shown as connection errors.
+HTTP failures are represented by `ApiError`, preserving the status,
+error message and details.
 
-The supplied fallback 404 handler handles unknown routes.
-The supplied 500 handler handles unexpected errors.
-An integration test will verify the fallback 404 response.
+Connection failures produce an `ApiError` with a null status and
+`isNetworkError` set to true.
+The UI uses `getErrorMessage` to display appropriate feedback.
+
+The supplied fallback handler returns 404 for unknown routes.
+The central error handler returns 400 for malformed JSON and
+500 for unexpected server errors.
+
+Integration tests verify the unknown-route 404 response and the
+malformed-JSON 400 response.
 
 ---
 
 ## Storage and verification
 
 Products are stored in server memory and initialized from
-`server/data/products.json`. Changes disappear when the server restarts.
+`server/data/products.json`.
 
-Planned integration tests cover CRUD, combined filters, validation,
-invalid identifiers, missing products, empty DELETE responses and
-the supplied fallback 404 handler.
+CRUD operations do not rewrite the seed file.
+Changes disappear when the server restarts.
+Deleted IDs are not reused within the same server session.
+
+Implemented integration tests cover:
+
+- Product listing and combined filters.
+- Retrieving existing and missing products.
+- Invalid route identifiers.
+- Product creation and generated IDs.
+- Validation failures and boundary values.
+- Updates that preserve the product ID.
+- Deletion with an empty 204 response.
+- Missing products after deletion.
+- Unknown-route 404 responses.
+- Malformed-JSON 400 responses.
+
+See [Product entity](product-entity.md) for storage details and
+[ADR-002](../decisions/ADR-002-consumo-api.md) for the API consumption decision.

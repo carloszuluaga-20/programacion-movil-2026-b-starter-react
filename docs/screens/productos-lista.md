@@ -2,68 +2,66 @@
 
 - **Route:** `/productos`
 - **Feature:** [Product catalog](../features/productos.md)
-- **Design reference:** Layout specification in the UI regions table below. No external mockup is provided.
-
----
+- **Design reference:** Layout specification below. No external mockup is provided.
 
 ## Purpose
 
-Allow users to browse the product catalog, search by name, filter by category, open product details and navigate to the creation form.
-
----
+Allow users to browse products, search by name, filter by category, open product details and navigate to the creation form.
 
 ## UI regions
 
 | Region | Component | Notes |
-|--------|-----------|-------|
-| Header | IonHeader, IonToolbar, IonTitle | Display the title "Products". |
-| Search | IonSearchbar | Search product names without case sensitivity. |
+|---|---|---|
+| Header | IonHeader, IonToolbar, IonTitle | Display "Product catalog". |
+| Search | IonInput | Search product names without case sensitivity. |
 | Category filters | Five IonButton components | Todas, Bebidas, Snacks, Aseo and Hogar. Indicate the selected filter. |
-| Body | ProductCard components | Show each product's name, category, formatted price and stock label. Use typed props. |
-| Feedback | IonSpinner, EmptyState, IonText | Display loading, empty, no-results and error states. |
-| Primary action | IonButton | "New product" navigates to `/productos/nuevo`. |
+| Body | IonList and ProductCard | Show name, category, formatted price, stock quantity and stock label. |
+| Feedback | IonSpinner and EmptyState | Display loading, empty, no-results and error states. |
+| Result count | Text with a status role | Display the number of matching products. |
+| Primary action | IonButton | "New product" opens `/productos/nuevo`. |
 
----
+ProductCard receives a typed ProductView and an optional selection callback. It uses an Ionic item with button behavior for navigation and a badge for the stock label.
 
 ## States
 
 | State | Trigger | UI |
-|-------|---------|-----|
-| Loading | Product request is pending | Show a spinner and loading message. |
-| Loaded | Products are available and match the filters | Show matching ProductCard components. |
-| Empty | The API returns an empty array | Show "No products yet" with a creation action. |
-| No results | The catalog has products but none match the filters | Show "No matching products" with a clear-filters action. |
-| Error | The API request fails | Show the error message and a "Retry" button. |
-| Offline | A network request fails because connectivity is unavailable | Show a connection error and a retry action. No cached offline catalog is available. |
+|---|---|---|
+| Loading | The catalog request is pending | Show a spinner and loading message. |
+| Loaded | Products match the filters | Show matching product cards and the result count. |
+| Empty | The API returns an empty array | Show an empty-catalog message with a creation action. |
+| No results | Products exist but none match the filters | Show a no-results message with a clear-filters action. |
+| Error | Loading fails | Show the error message and a retry action. |
+| Connection failure | The API cannot be reached | Show a connection error and a retry action. |
 
----
+There is no persistent offline cache. The page displays a request error when loading fails.
 
 ## Actions
 
 | User action | Result | Use case / event |
-|-------------|--------|------------------|
-| Open the page | Request the product catalog | getProducts |
+|---|---|---|
+| Open the page | Request the catalog | getProducts |
 | Enter search text | Filter the loaded list by name | filterProducts |
 | Select a category | Combine category and name filters | filterProducts |
 | Select Todas | Remove the category restriction | Update category filter |
 | Clear filters | Reset search text and category | Reset filters |
-| Open a product card | Navigate to `/productos/:id` | View product details |
+| Select a product card | Navigate to `/productos/:id` | View product details |
 | Select New product | Navigate to `/productos/nuevo` | Create product |
-| Select Retry | Repeat the failed catalog request | getProducts |
-| Return after creating, editing or deleting | Refresh the catalog to show current API data | getProducts |
+| Select Retry | Repeat the catalog request | getProducts |
+| Return to the page | Refresh products from the API | getProducts |
 
-Search and category filtering are combined through the domain function
-`filterProducts`. The page stores request state and filter values locally.
+Search and category filters are combined through `filterProducts`. Filtering happens locally on the loaded array.
 
----
+The page uses local React state. `useEffect` performs the initial load, and `useIonViewWillEnter` refreshes the catalog when the page becomes active again. A ref prevents overlapping catalog requests.
 
 ## Accessibility
 
-The following requirements will be checked during UI verification.
+Implemented support includes a search label, product-card labels, selected-category indicators through `aria-pressed`, and status or alert roles for feedback.
+
+Verify the following before marking them complete:
 
 - [ ] All interactive elements have accessible labels.
 - [ ] Touch targets are at least 48 × 48 CSS pixels.
-- [ ] Text remains readable when the browser font size or zoom increases.
+- [ ] Text remains readable when browser font size or zoom increases.
 - [ ] Text and controls meet WCAG AA contrast requirements.
 - [ ] The selected category is indicated by more than color alone.
 - [ ] Loading and error feedback is available to assistive technologies.

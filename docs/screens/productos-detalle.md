@@ -2,73 +2,73 @@
 
 - **Route:** `/productos/:id`
 - **Feature:** [Product catalog](../features/productos.md)
-- **Design reference:** Layout specification in the UI regions table below. No external mockup is provided.
-
----
+- **Design reference:** Layout specification below. No external mockup is provided.
 
 ## Purpose
 
-Display all fields of a selected product and allow users to edit it or delete it after confirmation.
-
----
+Display the selected product and allow users to open its edit form or delete it after confirmation.
 
 ## UI regions
 
 | Region | Component | Notes |
-|--------|-----------|-------|
-| Header | IonHeader, IonToolbar, IonTitle, IonBackButton | Display "Product details" and provide navigation back to `/productos`. |
-| Body | IonCard, IonCardContent, IonText | Show id, name, formatted price, category, stock quantity and stock label. |
-| Feedback | IonSpinner, EmptyState, IonText | Display loading, not-found and request-error states. |
-| Actions | IonButton | "Edit" opens the edit form. "Delete" displays confirmation. |
-| Delete confirmation | IonText and IonButton components | Show an inline confirmation with "Confirm deletion" and "Cancel". |
+|---|---|---|
+| Header | IonHeader, IonToolbar, IonTitle, IonBackButton | Show the detail title and provide navigation back to `/productos`. |
+| Product information | Heading, description list and IonBadge | Show ID, name, formatted price, category, stock quantity and stock label. |
+| Feedback | IonSpinner and EmptyState | Display loading, not-found and request-error states. |
+| Actions | IonButton | Edit opens the form; Delete displays confirmation. |
+| Delete confirmation | Inline text and IonButton components | Show "Confirm deletion" and "Cancel". |
+| Deletion error | Error message | Keep the product visible if deletion fails. |
 
-The domain function `toProductView` provides the formatted price and stock
-label. The original product supplies the remaining fields.
-
----
+`toProductView` provides the trimmed name, formatted price, stock label and stock flags.
 
 ## States
 
 | State | Trigger | UI |
-|-------|---------|-----|
+|---|---|---|
 | Loading | The product request is pending | Show a spinner and loading message. |
-| Loaded | The API returns the product | Show all fields and the edit and delete actions. |
-| Empty / not found | The API returns 404 for the product | Show "Product not found" and a back-to-list action. |
-| Invalid ID | The route ID is not valid | Show an invalid-identifier message and a back-to-list action. |
-| Error | The product request fails for another reason | Show the error message and a retry action. |
-| Offline | A network request fails because connectivity is unavailable | Show a connection error and a retry action. No cached product is available. |
-| Confirming deletion | The user selects Delete | Show inline confirmation without sending a deletion request yet. |
-| Deleting | The confirmed DELETE request is pending | Show progress and disable repeated deletion actions. |
-| Delete failed | The DELETE request fails | Keep the user on the detail page and show the error. |
+| Loaded | The API returns the product | Show product information and actions. |
+| Not found | The API returns 404 | Show a not-found message and a back-to-list action. |
+| Invalid ID | The route identifier fails local validation | Show an error; the header provides navigation back to the list. |
+| Loading error | Loading fails for another reason | Show the error and a retry action. |
+| Connection failure | The API cannot be reached | Show a connection error. |
+| Confirming deletion | The user selects Delete | Show confirmation without sending DELETE yet. |
+| Deleting | The confirmed request is pending | Disable confirmation actions and prevent repeated deletion requests. |
+| Delete failed | DELETE fails | Keep the product and confirmation visible, and display the error. |
+| Delete succeeded | DELETE returns 204 | Return to `/productos`. |
 
----
+There is no persistent offline cache.
 
 ## Actions
 
 | User action | Result | Use case / event |
-|-------------|--------|------------------|
-| Open the page | Read the route ID and request the product | getProduct |
-| Select Retry | Repeat the failed product request | getProduct |
+|---|---|---|
+| Open the page | Validate the route ID and request the product | getProduct |
+| Select Retry | Repeat the product load | getProduct |
 | Select Edit | Navigate to `/productos/:id/editar` | Edit product |
-| Return after editing | Request the current product data | getProduct |
+| Return to this page | Refresh the selected product | getProduct |
 | Select Delete | Display inline confirmation | Open delete confirmation |
 | Select Cancel | Hide confirmation and keep the product | Cancel deletion |
-| Select Confirm deletion | Send `DELETE /api/products/:id` | deleteProduct |
-| Complete deletion successfully | Return to `/productos`, where the list refreshes | Navigate to product list |
-| Select Back | Return to `/productos` | Navigate to product list |
+| Select Confirm deletion | Send DELETE to the API | deleteProduct |
+| Complete deletion successfully | Return to the product list | Navigate to `/productos` |
+| Select Back | Navigate back, with `/productos` as the fallback | Back navigation |
 
-Use `ApiError.status` to distinguish a missing product from other HTTP
-failures. Network failures receive a connection message.
+Successful editing returns to the product list. Cancelling the edit form returns to the product detail page.
 
----
+`ApiError.status` distinguishes a missing product from other failures. `getErrorMessage` provides a connection message for network errors.
+
+## State management
+
+The page uses local React state and refreshes through `useEffect` and `useIonViewWillEnter`.
+
+A request-version ref prevents outdated load responses from replacing current state. A separate ref prevents repeated deletion requests.
 
 ## Accessibility
 
-The following requirements will be checked during UI verification.
+Verify the following before marking them complete:
 
 - [ ] All interactive elements have accessible labels.
 - [ ] Touch targets are at least 48 × 48 CSS pixels.
-- [ ] Text remains readable when the browser font size or zoom increases.
+- [ ] Text remains readable when browser font size or zoom increases.
 - [ ] Text and controls meet WCAG AA contrast requirements.
 - [ ] Delete confirmation clearly describes the action.
 - [ ] Loading and error feedback is available to assistive technologies.
