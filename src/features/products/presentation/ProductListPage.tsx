@@ -2,55 +2,51 @@ import {
   IonButton,
   IonContent,
   IonHeader,
-  IonItem,
-  IonLabel,
+  IonInput,
   IonList,
   IonPage,
+  IonSpinner,
   IonTitle,
   IonToolbar,
   useIonViewWillEnter,
 } from '@ionic/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useHistory } from 'react-router-dom';
 
 import { getErrorMessage } from '../data/api-error';
 import { getProducts } from '../data/products-api';
+import {
+  CATEGORIES,
+  filterProducts,
+  toProductView,
+} from '../domain/product';
 import type { Product } from '../domain/product';
 import EmptyState from './EmptyState';
+import ProductCard from './ProductCard';
 
-/**
- * Pantalla: lista de productos (ruta /productos).
- *
- * El código de abajo es un EJEMPLO MÍNIMO YA DADO de cómo se carga una lista:
- *  - `useState` guarda los productos, el estado de la carga y el mensaje de error;
- *  - `useEffect` con `[]` carga la lista UNA vez, al abrir la pantalla;
- *  - `useIonViewWillEnter` la recarga cuando la persona VUELVE a esta pantalla (Ionic mantiene la
- *    página en memoria, así que sin esto no se vería, por ejemplo, un producto recién creado);
- *  - `IonItem` + `IonLabel` pintan cada producto.
- *
- * TODO(Parte 3): completar la pantalla
- *  - un buscador por texto (`IonInput`) y un filtro por categoría con un `IonButton` por categoría
- *    («Todas» + CATEGORIES) y una variable de estado; filtrar con `filterProducts()`;
- *  - estado VACÍO (la API no tiene productos) y estado SIN RESULTADOS (los filtros no encuentran nada),
- *    ambos con `EmptyState`;
- *  - `ProductCard` por producto, en lugar de IonItem/IonLabel, usando `toProductView()`;
- *  - al tocar un producto, ir a /productos/:id (`useHistory`);
- *  - un botón para ir al formulario (/productos/nuevo).
- * Para ver el estado de error, detenga el servidor (`npm run server`).
- */
 type LoadStatus = 'loading' | 'ready' | 'error';
 
+/** Loads the catalog and applies local search and category filters. */
 const ProductListPage: React.FC = () => {
+  const history = useHistory();
   const [products, setProducts] = useState<Product[]>([]);
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [errorMessage, setErrorMessage] = useState('');
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('');
   const isLoadingRef = useRef(false);
 
   const loadProducts = useCallback(async () => {
-    if (isLoadingRef.current) return; // evita pedir la lista dos veces a la vez
+    // Prevent overlapping requests from React and Ionic lifecycle events.
+    if (isLoadingRef.current) return;
+
     isLoadingRef.current = true;
     setStatus('loading');
+    setErrorMessage('');
+
     try {
-      setProducts(await getProducts());
+      const result = await getProducts();
+      setProducts(result);
       setStatus('ready');
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -64,39 +60,126 @@ const ProductListPage: React.FC = () => {
     void loadProducts();
   }, [loadProducts]);
 
+  // Ionic keeps pages mounted: refresh when returning after a mutation.
   useIonViewWillEnter(() => {
     void loadProducts();
   });
+
+  const filteredProducts = filterProducts(products, { search, category });
+
+  const clearFilters = () => {
+    setSearch('');
+    setCategory('');
+  };
 
   return (
     <IonPage>
       <IonHeader>
         <IonToolbar>
-          <IonTitle>Productos</IonTitle>
+          <IonTitle>Product catalog</IonTitle>
         </IonToolbar>
       </IonHeader>
-      <IonContent>
-        {status === 'loading' && <p className="ion-padding">Cargando productos…</p>}
+
+      <IonContent className="ion-padding">
+        <IonButton routerLink="/productos/nuevo">
+          New product
+        </IonButton>
+
+        <IonInput
+          label="Search by name"
+          labelPlacement="stacked"
+          placeholder="Enter a product name"
+          value={search}
+          clearInput
+          onIonInput={(event) => setSearch(event.detail.value ?? '')}
+        />
+
+        <div
+          role="group"
+          aria-label="Filter products by category"
+          className="ion-margin-top ion-margin-bottom"
+          style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}
+        >
+          <IonButton
+            fill={category === '' ? 'solid' : 'outline'}
+            aria-pressed={category === ''}
+            onClick={() => setCategory('')}
+          >
+            Todas
+          </IonButton>
+
+          {CATEGORIES.map((item) => (
+            <IonButton
+              key={item}
+              fill={category === item ? 'solid' : 'outline'}
+              aria-pressed={category === item}
+              onClick={() => setCategory(item)}
+            >
+              {item}
+            </IonButton>
+          ))}
+        </div>
+
+        {status === 'loading' && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="ion-text-center ion-padding"
+          >
+            <IonSpinner aria-hidden="true" />
+            <p>Loading products…</p>
+          </div>
+        )}
+
         {status === 'error' && (
+          <div role="alert">
+            <EmptyState
+              title="Unable to load products"
+              message={errorMessage}
+              actionLabel="Retry"
+              onAction={() => void loadProducts()}
+            />
+          </div>
+        )}
+
+        {status === 'ready' && products.length === 0 && (
           <EmptyState
-            title="No se pudo cargar"
-            message={errorMessage}
-            actionLabel="Reintentar"
-            onAction={() => void loadProducts()}
+            title="No products yet"
+            message="Create your first product to start the catalog."
+            actionLabel="Create product"
+            onAction={() => history.push('/productos/nuevo')}
           />
         )}
-        {status === 'ready' && (
-          <IonList>
-            {products.map((product) => (
-              <IonItem key={product.id}>
-                <IonLabel>{product.name}</IonLabel>
-              </IonItem>
-            ))}
-          </IonList>
+
+        {status === 'ready' &&
+          products.length > 0 &&
+          filteredProducts.length === 0 && (
+            <EmptyState
+              title="No results"
+              message="Try another name or category."
+              actionLabel="Clear filters"
+              onAction={clearFilters}
+            />
+          )}
+
+        {status === 'ready' && filteredProducts.length > 0 && (
+          <>
+            <p role="status" aria-live="polite">
+              {filteredProducts.length}{' '}
+              {filteredProducts.length === 1 ? 'product' : 'products'}
+            </p>
+
+            <IonList>
+              {filteredProducts.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={toProductView(product)}
+                  onSelect={(id) => history.push(`/productos/${id}`)}
+                />
+              ))}
+            </IonList>
+          </>
         )}
-        <IonButton routerLink="/productos/nuevo" className="ion-margin">
-          Nuevo producto
-        </IonButton>
       </IonContent>
     </IonPage>
   );
