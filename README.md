@@ -1,107 +1,227 @@
-# Catálogo de productos · Starter Ionic React (versión 2)
+# Product Catalog — Ionic React
 
-Parcial práctico del corte 2 · Programación Móvil · CORHUILA 2026-B (modalidad individual).
+Mobile Programming practical exam, second assessment period — CORHUILA 2026-B.
 
-Este repositorio es el punto de partida. El proyecto tiene tres piezas que se construyen durante el parcial, siguiendo el [Mobile Governance Framework](https://github.com/jesusarielgb-works/mobile-governance-framework):
+This project implements a product catalog with an Express API, an Ionic React application, and a standalone Kotlin exercise. The application supports searching, filtering, viewing, creating, updating, and deleting products.
 
-- **API Express** (`server/`): CRUD de productos con validación, filtros y manejo de errores.
-- **App Ionic React** (`src/`): lista con búsqueda y filtro, detalle, y formulario de crear y editar, organizada por capas.
-- **Ejercicio Kotlin** (`kotlin/Product.kt`): modelo y funciones básicas, con lo visto en la semana 7.
+Project documentation was committed before the first implementation commit, using templates from the [Mobile Governance Framework](https://github.com/jesusarielgb-works/mobile-governance-framework).
 
-Además, la **documentación** (`docs/`) se escribe antes del código, a partir de las plantillas del framework.
+## Requirements
 
-> El enunciado oficial es el PDF de la actividad en Moodle. Este README es un resumen; si algo difiere, manda el PDF.
+- Node.js 22.12 or later.
+- npm.
+- A browser.
+- Kotlin Playground for the standalone Kotlin exercise.
 
-## Cómo ejecutar
+## Run locally
 
-Requisito: Node.js 22.12 o superior (`node --version`).
+Install dependencies:
 
 ```bash
-npm install        # instala dependencias (una sola vez)
-npm run server     # arranca la API en http://localhost:3000
-npm run dev        # arranca la app en http://localhost:5173 (en otra terminal)
-npm test           # corre las pruebas (Vitest)
-npm run lint       # revisión de estilo del código
-npm run build      # revisión de tipos y compilación para producción
+npm install
 ```
 
-La app y la API se ejecutan al mismo tiempo, cada una en su terminal. La app lee la dirección de la API de la variable `VITE_API_URL`: copie `.env.example` como `.env` si necesita cambiarla. El archivo `.env` está ignorado por Git; nunca se versiona.
+Copy `.env.example` to `.env`.
 
-Rutas de la app, ya creadas como pantallas esqueleto: `/productos` (lista), `/productos/nuevo`, `/productos/:id` (detalle) y `/productos/:id/editar`.
+Windows PowerShell:
 
-Hoy la API responde `501 Not implemented` en cada ruta de `/api/products`, y las pantallas muestran un `TODO`. Construir esa funcionalidad es el trabajo del parcial.
+```powershell
+Copy-Item .env.example .env
+```
 
-## Flujo de entrega
+Start the API:
 
-1. Haga un **fork** de este repositorio a su cuenta de GitHub y clónelo.
-2. Cree una rama de funcionalidad: `git switch -c feature/productos`.
-3. Trabaje la lista de [TODO.md](./TODO.md), en orden, con commits pequeños en formato [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): resumen` (por ejemplo, `docs(productos): describe la funcionalidad` o `feat(api): agrega el endpoint de lista`).
-4. Los documentos de `docs/` van **antes** que el código: el primer commit de código debe ser posterior al commit de documentación.
-5. Abra un **Pull Request hacia el `main` de su propio fork** (no hacia el repositorio original), con una descripción de lo hecho y el checklist de `docs/definition-of-done.md` marcado.
-6. Pegue el **enlace del PR** en la actividad de Moodle (texto en línea) antes del cierre: sábado 10 de octubre de 2026, 11:59 p. m.
+```bash
+npm run server
+```
 
-## Qué se evalúa (5,0)
+The API runs at `http://localhost:3000`.
 
-| Parte | Puntos |
+In another terminal, start the application:
+
+```bash
+npm run dev
+```
+
+Open `http://localhost:5173/productos`.
+
+Keep both terminals running. The application reads the API base URL from `VITE_API_URL`, with `http://localhost:3000` as the default.
+
+Products are stored in server memory. Restarting the API restores the eight seed products and removes changes made during the previous session.
+
+## Application routes
+
+| Route | Purpose |
 |---|---|
-| 1. Documentar antes de codificar | 0,75 |
-| 2. API Express | 1,0 |
-| 3. App Ionic | 1,5 |
-| 4. Kotlin | 0,5 |
-| 5. Calidad | 0,5 |
-| 6. Git y entrega | 0,25 |
-| 7. Inglés | 0,5 |
+| `/productos` | Product list, name search, and category filters |
+| `/productos/nuevo` | Create a product |
+| `/productos/:id` | Product details and deletion confirmation |
+| `/productos/:id/editar` | Edit an existing product |
 
-El detalle de cada criterio está en [TODO.md](./TODO.md).
+The list distinguishes loading, request errors, an empty catalog, and filters with no results. Product cards display the name, category, formatted price, stock quantity, and stock label.
 
-## Contrato de la API (resumen)
+The detail page provides editing and an inline deletion confirmation. The shared form validates each field and displays API error details when a request is rejected. Successful creation, editing, or deletion returns to the product list.
 
-Recurso `/api/products` con `{ id: number, name: string, price: number, category: string, stock: integer }`. Los datos semilla están en `server/data/products.json` y se guardan en memoria (se reinician al reiniciar el servidor).
+Stock labels follow the assignment contract:
 
-| Método y ruta | Éxito | Errores |
+- `Agotado`: zero units.
+- `Pocas unidades`: one to four units.
+- `Disponible`: five or more units.
+
+Prices use Colombian peso formatting, for example `$ 1.250.000`.
+
+## Architecture
+
+The product feature is organized into three layers:
+
+| Layer | Responsibility |
+|---|---|
+| `domain` | Product types, validation, filtering, and display mapping |
+| `data` | API configuration, HTTP requests, and `ApiError` |
+| `presentation` | Ionic pages, reusable components, and screen state |
+
+Presentation uses the domain functions and API client. Data depends on domain types. Domain functions do not import React, Ionic, or HTTP code.
+
+## State management decision
+
+We use local React state with `useState` because each screen manages a small amount of product data and UI state.
+`useEffect` loads the data needed by a screen when it is mounted.
+`useIonViewWillEnter` refreshes data when a user returns to a page that Ionic keeps in memory.
+Pure domain functions handle validation, filtering, and product display mapping outside the UI components.
+We did not add a global store because the API remains the source of truth and the current screens do not require shared client state.
+
+## API contract
+
+A product contains these fields:
+
+```json
+{
+  "id": 1,
+  "name": "Agua mineral 600 ml",
+  "price": 1800,
+  "category": "Bebidas",
+  "stock": 120
+}
+```
+
+| Method and path | Success | Expected errors |
 |---|---|---|
-| `GET /api/products?search=&category=` | 200 + arreglo | — |
-| `GET /api/products/:id` | 200 + objeto | 400 (id no numérico) · 404 |
-| `POST /api/products` | 201 + objeto creado | 400 |
-| `PUT /api/products/:id` | 200 + objeto actualizado | 400 · 404 |
-| `DELETE /api/products/:id` | 204 sin cuerpo | 400 · 404 |
+| `GET /api/products?search=&category=` | `200`, product array | — |
+| `GET /api/products/:id` | `200`, product object | `400`, invalid ID; `404`, missing product |
+| `POST /api/products` | `201`, created product | `400`, invalid input |
+| `PUT /api/products/:id` | `200`, updated product | `400`, invalid ID or input; `404`, missing product |
+| `DELETE /api/products/:id` | `204`, no response body | `400`, invalid ID; `404`, missing product |
 
-Validación: `name` obligatorio (máximo 60 caracteres), `price` número mayor que 0, `category` una de `Bebidas`, `Snacks`, `Aseo` o `Hogar`, y `stock` entero mayor o igual que 0. Todo error usa el formato `{ "error": "mensaje", "details": ["..."] }`; una ruta desconocida responde 404 con ese formato, y un error inesperado, 500.
+The name search is case-insensitive and matches part of a product name. The category filter requires an exact match. Both API filters can be combined.
 
-## Estructura
+Creation and editing require:
+
+- A non-empty string name with at most 60 characters.
+- A finite numeric price greater than zero.
+- A category from `Bebidas`, `Snacks`, `Aseo`, or `Hogar`.
+- An integer stock greater than or equal to zero.
+
+The server assigns IDs on creation and preserves them during editing. Deleted IDs are not reused during the same server session.
+
+Errors use this response structure:
+
+```json
+{
+  "error": "Invalid product data",
+  "details": [
+    "Price must be a number greater than zero."
+  ]
+}
+```
+
+## API error handling
+
+`express.json()` parses JSON request bodies, and `cors()` allows requests from the configured local development origins.
+`parseId()` rejects IDs that contain characters other than digits, while the routes return validation errors as `400` and missing products as `404`, using the `{ error, details }` format.
+The supplied fallback handler returns `404` for unknown routes, and the central error handler returns `400` for malformed JSON or `500` for unexpected server errors.
+The HTTP client converts failed responses into `ApiError` with a status code and details, while connection failures produce an `ApiError` with a null status.
+The UI uses `getErrorMessage()` and `ApiError` to distinguish connection problems, missing products, and other failures, and the form preserves entered values when saving fails.
+
+## Error-handler verification
+
+The API test suite requests an unknown route and checks that it returns `404` with an error message and a details array.
+
+To reproduce this manually, open:
 
 ```text
-docs/                         plantillas del framework (se copian y se llenan)
-  features/ screens/ decisions/ api/ definition-of-done.md
-kotlin/Product.kt             ejercicio Kotlin (esqueleto)
-server/
-  app.js                      createApp(): rutas de la API (stubs 501) + piezas ya dadas
-  index.js                    arranque en el puerto 3000
-  data/products.json          8 productos semilla
-src/app/                      arranque, rutas y tema
-src/features/products/        funcionalidad organizada por capas del framework
-  data/                       config.ts (API_URL), api-error.ts (ApiError), products-api.ts (cliente fetch)
-  domain/product.ts           tipos, formatCOP (dado), validateProduct, toProductView, filterProducts
-  presentation/               páginas, EmptyState (dado, modelo de props tipadas) y ProductCard
-  __tests__/                  test-server.ts (helper dado), pruebas de ejemplo y espacio para las suyas
+http://localhost:3000/api/no-existe
 ```
 
-Capas (framework, `01-architecture/layers-and-state`): `presentation` depende de `domain` y de `data`; `data` depende de `domain`; `domain` no depende de nada. El estado de cada pantalla puede vivir en la misma página con `useState` y `useEffect`.
+No product route matches this URL, so Express reaches the supplied fallback handler. This demonstrates the unknown-route handler separately from a missing product returned by `GET /api/products/:id`.
 
-## Qué ya viene resuelto
+The test suite also sends malformed JSON and checks that the supplied central error handler returns `400`.
 
-Para concentrar el parcial en lo trabajado en clase, algunas piezas vienen hechas y con comentarios en español. Se usan y se explican (ADR-002 y la sección «API error handling»), pero no se piden escritas:
+## Quality checks
 
-- **Servidor:** `express.json()`, `cors()`, `parseId()`, el manejador 404 de rutas desconocidas y el manejador central de errores (500), en `server/app.js`.
-- **Cliente:** `API_URL` (`data/config.ts`), la clase `ApiError` y `getErrorMessage` (`data/api-error.ts`), y `getProducts` resuelta como ejemplo (con la función `request`) en `data/products-api.ts`.
-- **Dominio:** `formatCOP()`.
-- **Presentación:** `EmptyState` como modelo de componente con props tipadas; el esqueleto de la lista (carga con `useEffect` e `IonItem`/`IonLabel`) y el campo `IonInput` del formulario.
-- **Pruebas:** el helper `startTestServer()` y un ejemplo de prueba de la API.
+Run these commands from the repository root:
 
-## Entrega: secciones de este README
+```bash
+npm test
+npm run lint
+npm run build
+```
 
-Al terminar, agregue aquí abajo las dos secciones escritas en inglés (3 a 5 frases cada una) que indica la Parte 7 de [TODO.md](./TODO.md): **State management decision** y **API error handling**. También actualice este README con cualquier paso adicional necesario para ejecutar su versión.
+The tests cover domain validation, product display mapping, filtering, and API behavior, including CRUD operations and error responses.
 
----
+API tests use `startTestServer()` to create a fresh server instance for each test. Domain tests run without HTTP requests or UI components.
 
-Las plantillas de `docs/` provienen del Mobile Governance Framework (licencia MIT; ver `docs/LICENSE-mobile-governance-framework.txt`).
+The production build checks TypeScript types before generating the application bundle.
+
+## Kotlin exercise
+
+Open `kotlin/Product.kt`, copy its content into [Kotlin Playground](https://play.kotlinlang.org), and run it.
+
+The exercise includes:
+
+- A `Product` class with an immutable ID and editable catalog fields.
+- Nullable stock represented by `Int?`.
+- `stockLabel()` with safe null handling.
+- `applyDiscount()` for percentage discounts.
+- Three example products printed with a 10% discount.
+
+Expected output:
+
+```text
+Mineral water | Stock: Sin dato | Price with 10% discount: 1620.0 COP
+Oat cookies | Stock: Agotado | Price with 10% discount: 2430.0 COP
+Hand soap | Stock: Pocas unidades | Price with 10% discount: 6210.0 COP
+```
+
+The Kotlin exercise does not require an Android project.
+
+## Documentation
+
+| Document | Purpose |
+|---|---|
+| [Product feature](docs/features/productos.md) | Feature scope and behavior |
+| [Product list](docs/screens/productos-lista.md) | List screen specification |
+| [Product detail](docs/screens/productos-detalle.md) | Detail screen specification |
+| [Product form](docs/screens/productos-formulario.md) | Create and edit screen specification |
+| [ADR-001](docs/decisions/ADR-001-estado.md) | State management decision |
+| [ADR-002](docs/decisions/ADR-002-consumo-api.md) | API consumption and error handling |
+| [API endpoints](docs/api/products-endpoints.md) | Five endpoint contracts |
+| [Product entity](docs/api/product-entity.md) | Data model and in-memory storage |
+| [Definition of Done](docs/definition-of-done.md) | Delivery checklist |
+
+## Git and submission
+
+Work is developed on `feature/catalogo-productos` with meaningful Conventional Commits.
+
+The documentation commit precedes the implementation commits. The delivery Pull Request must target `main` in this same fork:
+
+```text
+carloszuluaga-20/programacion-movil-2026-b-starter-react
+```
+
+The Pull Request description includes the completed work and a checklist of verified requirements. Submit its URL in the Moodle activity before the official deadline.
+
+Do not commit `.env` or `node_modules`.
+
+## Attribution
+
+Documentation templates come from the Mobile Governance Framework under the MIT license. See `docs/LICENSE-mobile-governance-framework.txt`.

@@ -1,11 +1,8 @@
 /**
- * YA DADO. Error que lanza el cliente de la API (capa data).
+ * Error used by the product API client.
  *
- * Distingue dos situaciones (regla del framework: mapear los errores de bajo nivel a errores
- * del dominio antes de que lleguen a la interfaz):
- *  - ERROR DE RED: `fetch` lanza una excepción porque la API no responde → `status` es null.
- *  - RESPUESTA NO EXITOSA: la API responde 400, 404, 500… → `status` trae el código y
- *    `details` los mensajes que envió el servidor.
+ * Connection failures have a null status.
+ * Unsuccessful HTTP responses preserve the status and server details.
  */
 export class ApiError extends Error {
   readonly status: number | null;
@@ -21,16 +18,19 @@ export class ApiError extends Error {
   }
 }
 
-/** YA DADO. Mensaje comprensible para la persona usuaria a partir de cualquier error. */
+/** Returns a user-friendly message for an API or unexpected error. */
 export function getErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.isNetworkError) {
-      return 'No fue posible conectar con el servidor. Verifique que la API esté en ejecución.';
+      return 'Unable to connect to the server. Check that the API is running.';
     }
+
     if (error.status === 404) {
-      return 'No encontramos ese producto.';
+      return 'We could not find that product.';
     }
+
     return error.message;
   }
-  return 'Ocurrió un error inesperado. Intente de nuevo.';
+
+  return 'An unexpected error occurred. Please try again.';
 }
